@@ -36,16 +36,23 @@ console.log(String(file));
 
 - Wrapping targets punctuation from Unicode `\p{P}` (including ASCII and full-width/CJK variants).
 - Exactly two consecutive em dashes (`——`) are wrapped as one token.
+- Exactly two consecutive CJK ellipsis characters (`……`) are wrapped as one token.
 - Single `-`, `–`, and `—` are intentionally excluded and never wrapped.
-- In-word Latin apostrophes are excluded when matching `Latin + (' or ’) + Latin` (for example `Mom's`, `I'd`, `we’re`).
+- Percent-like signs `%`, `％`, `﹪`, `‰`, and `‱` are excluded from wrapping.
+- In-word Latin apostrophes are excluded when matching `Latin + (' or ’) + Latin` (for example `Mom’s`, `I’d`, `we’re`).
 - Punctuation already inside an existing configured wrapper is not wrapped again.
+
+Examples:
+
+- `0.5%` => `0<span class="cjk-punc">.</span>5%`
+- `甲……乙` => `甲<span class="cjk-punc">……</span>乙`
 
 ## Adjacency Classes
 
-When wrappers are adjacent to default quote/bracket marks, extra classes are added to neighboring punctuation wrappers:
+When wrappers are adjacent to default quote/bracket marks, extra classes are added only to 点号 targets (`，。？！；：、`):
 
-- Left quote/bracket marks `“`, `‘`, `《`, `「`, `『` assign `adj-l` to the immediate left neighboring punctuation wrapper.
-- Right quote/bracket marks `”`, `’`, `》`, `」`, `』` assign `adj-l` to the immediate left neighboring punctuation wrapper and `adj-r` to the immediate right neighboring punctuation wrapper.
+- Left quote/bracket marks `“`, `‘`, `《`, `「`, `『` assign `adj-l` to the immediate left neighboring wrapper only when that neighbor is a 点号 target.
+- Right quote/bracket marks `”`, `’`, `》`, `」`, `』` assign `adj-l` to the first non-quote/bracket wrapper on the left and `adj-r` to the immediate right neighboring wrapper, but only when those neighbors are 点号 targets.
 - If both sides apply to the same wrapper, the output is normalized to `adj-m` only.
 
 One-sided classes are additive on top of `className` (for example `class="cjk-punc adj-l"` or `class="han-punc custom adj-r"`).
@@ -55,3 +62,4 @@ Examples:
 - `。”` => `。` gets `adj-l`
 - `”！` => `！` gets `adj-r`
 - `”。“` => middle `。` gets `adj-m`
+- `……”` => `……` is wrapped, with no `adj-*` class

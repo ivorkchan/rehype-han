@@ -45,13 +45,16 @@ test('treats double CJK ellipsis as a single punctuation token', async () => {
   assert.equal(output, expected);
 });
 
-test('keeps percent-like signs unwrapped in decimal examples', async () => {
-  const input = '<p>0.5% 0.5％ 0.5﹪ 0.5‰ 0.5‱</p>';
-  const expected = '<p>0<span class="cjk-punc">.</span>5% 0<span class="cjk-punc">.</span>5％ 0<span class="cjk-punc">.</span>5﹪ 0<span class="cjk-punc">.</span>5‰ 0<span class="cjk-punc">.</span>5‱</p>';
+test('keeps each percent-like sign unwrapped in decimal examples', async () => {
+  const percentLikeSigns = ['%', '％', '﹪', '‰', '‱'];
 
-  const output = await render(input);
+  for (const sign of percentLikeSigns) {
+    const input = '<p>0.5' + sign + '</p>';
+    const expected = '<p>0<span class="cjk-punc">.</span>5' + sign + '</p>';
+    const output = await render(input);
 
-  assert.equal(output, expected);
+    assert.equal(output, expected);
+  }
 });
 
 test('does not wrap single hyphen-minus, en dash, or em dash', async () => {
@@ -88,6 +91,27 @@ test("applies adj-l to the left neighbor in the required quote-right example", a
   const output = await render(input);
 
   assert.equal(output, expected);
+});
+
+test('applies adjacency classes only to 点号 targets', async () => {
+  const adjacencyTargets = ['，', '。', '？', '！', '；', '：', '、'];
+
+  for (const mark of adjacencyTargets) {
+    const leftOutput = await render('<p>' + mark + '“</p>');
+    const leftExpected = '<p><span class="cjk-punc adj-l">' + mark + '</span><span class="cjk-punc">“</span></p>';
+
+    assert.equal(leftOutput, leftExpected);
+
+    const rightOutput = await render('<p>”' + mark + '</p>');
+    const rightExpected = '<p><span class="cjk-punc">”</span><span class="cjk-punc adj-r">' + mark + '</span></p>';
+
+    assert.equal(rightOutput, rightExpected);
+  }
+
+  const nonTargetOutput = await render('<p>”……</p>');
+  const nonTargetExpected = '<p><span class="cjk-punc">”</span><span class="cjk-punc">……</span></p>';
+
+  assert.equal(nonTargetOutput, nonTargetExpected);
 });
 
 test('does not assign adjacency classes in the required `……”` example', async () => {
