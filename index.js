@@ -96,6 +96,12 @@ function getAdjacencyClasses(parts) {
     adjacencyClasses.set(index, new Set([className]));
   }
 
+  function isQuoteBracketWrapper(value) {
+    return (
+      LEFT_COMPRESSION_MARKS.has(value) || RIGHT_COMPRESSION_MARKS.has(value)
+    );
+  }
+
   for (let index = 0; index < parts.length; index += 1) {
     const part = parts[index];
 
@@ -112,11 +118,23 @@ function getAdjacencyClasses(parts) {
     }
 
     if (RIGHT_COMPRESSION_MARKS.has(part.value)) {
-      const leftNeighbor = parts[index - 1];
       const rightNeighbor = parts[index + 1];
+      let leftNeighborIndex = index - 1;
 
-      if (leftNeighbor && leftNeighbor.type === 'punctuation') {
-        addAdjacencyClass(index - 1, ADJ_LEFT_CLASS);
+      while (leftNeighborIndex >= 0) {
+        const leftNeighbor = parts[leftNeighborIndex];
+
+        if (leftNeighbor.type !== 'punctuation') {
+          break;
+        }
+
+        if (isQuoteBracketWrapper(leftNeighbor.value)) {
+          leftNeighborIndex -= 1;
+          continue;
+        }
+
+        addAdjacencyClass(leftNeighborIndex, ADJ_LEFT_CLASS);
+        break;
       }
 
       if (rightNeighbor && rightNeighbor.type === 'punctuation') {
