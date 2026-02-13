@@ -42,15 +42,16 @@ console.log(String(file));
 
 ## Adjacency Classes
 
-When wrappers are adjacent to default quote/bracket marks, extra classes are added to the neighboring punctuation wrapper:
+When wrappers are adjacent to default quote/bracket marks, extra classes are added to neighboring punctuation wrappers:
 
-- `adj-l`: mark immediately to the left of one of `“`, `‘`, `《`, `「`, `『`
-- `adj-r`: mark immediately to the right of one of `”`, `’`, `》`, `」`, `』`
+- Left quote/bracket marks `“`, `‘`, `《`, `「`, `『` assign `adj-l` to the immediate left neighboring punctuation wrapper.
+- Right quote/bracket marks `”`, `’`, `》`, `」`, `』` assign `adj-l` to the immediate left neighboring punctuation wrapper and `adj-r` to the immediate right neighboring punctuation wrapper.
+- If both sides apply to the same wrapper, the output is normalized to `adj-m` only.
 
-These classes are additive on top of `className` (for example `class="cjk-punc adj-l"` or `class="han-punc custom adj-r"`).
+One-sided classes are additive on top of `className` (for example `class="cjk-punc adj-l"` or `class="han-punc custom adj-r"`).
 
 Examples:
 
-- `。“` => `。` gets `adj-l`
-- `。“‘` => `。` and `“` get `adj-l`
-- `“‘文本’”` => outer `“` gets `adj-l`, outer `”` gets `adj-r`
+- `。”` => `。` gets `adj-l`
+- `”！` => `！` gets `adj-r`
+- `”。“` => middle `。` gets `adj-m`

@@ -81,6 +81,15 @@ test("preserves right-neighbor adj-r in the control quote-right exclamation exam
   assert.equal(output, expected);
 });
 
+test('normalizes dual-side adjacency to adj-m in the required `”。“` example', async () => {
+  const input = '<p>”。“</p>';
+  const expected = '<p><span class="cjk-punc">”</span><span class="cjk-punc adj-m">。</span><span class="cjk-punc">“</span></p>';
+
+  const output = await render(input);
+
+  assert.equal(output, expected);
+});
+
 test('applies adj-l to both neighboring marks in the required `。“‘` example', async () => {
   const input = '<p>。“‘</p>';
   const expected = '<p><span class="cjk-punc adj-l">。</span><span class="cjk-punc adj-l">“</span><span class="cjk-punc">‘</span></p>';
@@ -108,9 +117,9 @@ test('uses the default left quote/bracket adjacency subset', async () => {
   assert.equal(output, expected);
 });
 
-test('uses the default right quote/bracket adjacency subset', async () => {
+test('uses the default right quote/bracket adjacency subset with adj-m normalization', async () => {
   const input = '<p>』」》’”，</p>';
-  const expected = "<p><span class=\"cjk-punc adj-l\">』</span><span class=\"cjk-punc adj-r adj-l\">」</span><span class=\"cjk-punc adj-r adj-l\">》</span><span class=\"cjk-punc adj-r adj-l\">’</span><span class=\"cjk-punc adj-r\">”</span><span class=\"cjk-punc adj-r\">，</span></p>";
+  const expected = "<p><span class=\"cjk-punc adj-l\">』</span><span class=\"cjk-punc adj-m\">」</span><span class=\"cjk-punc adj-m\">》</span><span class=\"cjk-punc adj-m\">’</span><span class=\"cjk-punc adj-r\">”</span><span class=\"cjk-punc adj-r\">，</span></p>";
 
   const output = await render(input);
 
@@ -179,7 +188,7 @@ test('fixture regression keeps expected wrappers and adjacency around quote/brac
 
   assert.ok(
     output.includes(
-      '<span class="cjk-punc">》</span><span class="cjk-punc adj-r adj-l">：</span><span class="cjk-punc">「</span>'
+      '<span class="cjk-punc">》</span><span class="cjk-punc adj-m">：</span><span class="cjk-punc">「</span>'
     )
   );
   assert.ok(
