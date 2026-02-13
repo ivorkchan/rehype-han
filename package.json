@@ -1,0 +1,43 @@
+{
+  "name": "rehype-han",
+  "version": "0.1.0",
+  "description": "Rehype plugin to wrap text segments with proper tags.",
+  "type": "module",
+  "main": "./index.js",
+  "exports": "./index.js",
+  "files": [
+    "index.js",
+    "README.md"
+  ],
+  "keywords": [
+    "rehype",
+    "rehype-plugin",
+    "unist",
+    "hast",
+    "latin",
+    "cjk"
+  ],
+  "license": "MIT",
+  "author": "ivorkchan",
+  "engines": {
+    "node": ">=16"
+  },
+  "scripts": {
+    "test": "node --test",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier . --write --ignore-unknown",
+    "format:check": "prettier . --check --ignore-unknown"
+  },
+  "dependencies": {
+    "unist-util-visit-parents": "^6.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.0.0",
+    "prettier": "^3.8.1",
+    "rehype-parse": "^9.0.0",
+    "rehype-stringify": "^9.0.0",
+    "unified": "^11.0.0"
+  }
+}

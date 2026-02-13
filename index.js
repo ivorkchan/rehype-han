@@ -7,11 +7,12 @@ const DEFAULT_IGNORE_TAGS = [
   'code',
   'pre',
   'kbd',
-  'samp'
+  'samp',
 ];
 
 const PUNCTUATION_REGEX = /\p{P}/u;
 const LATIN_LETTER_REGEX = /\p{Script=Latin}/u;
+const WHITESPACE_REGEX = /\s/u;
 const EXCLUDED_PUNCTUATION = new Set([
   '-',
   '–',
@@ -20,16 +21,24 @@ const EXCLUDED_PUNCTUATION = new Set([
   '％',
   '﹪',
   '‰',
-  '‱'
+  '‱',
 ]);
 const ENGLISH_IN_WORD_APOSTROPHES = new Set(["'", '’']);
 const EM_DASH = '—';
 const DOUBLE_EM_DASH = '——';
 const ELLIPSIS = '…';
 const DOUBLE_ELLIPSIS = '……';
-const LEFT_COMPRESSION_MARKS = new Set(['“', '‘', '《', '「', '『']);
-const RIGHT_COMPRESSION_MARKS = new Set(['”', '’', '》', '」', '』']);
-const ADJACENCY_TARGET_MARKS = new Set(['，', '。', '？', '！', '；', '：', '、']);
+const LEFT_COMPRESSION_MARKS = new Set(['“', '‘', '《', '「', '『', '（']);
+const RIGHT_COMPRESSION_MARKS = new Set(['”', '’', '》', '」', '』', '）']);
+const ADJACENCY_TARGET_MARKS = new Set([
+  '，',
+  '。',
+  '？',
+  '！',
+  '；',
+  '：',
+  '、',
+]);
 const ADJ_LEFT_CLASS = 'adj-l';
 const ADJ_RIGHT_CLASS = 'adj-r';
 const ADJ_MIDDLE_CLASS = 'adj-m';
@@ -42,14 +51,28 @@ function isLatinLetter(ch) {
   return Boolean(ch) && LATIN_LETTER_REGEX.test(ch);
 }
 
-function isEnglishInWordApostrophe(chars, index) {
+function isEnglishWordApostrophe(chars, index) {
   const ch = chars[index];
+  const previousChar = chars[index - 1];
+  const nextChar = chars[index + 1];
 
   if (!ENGLISH_IN_WORD_APOSTROPHES.has(ch)) {
     return false;
   }
 
-  return isLatinLetter(chars[index - 1]) && isLatinLetter(chars[index + 1]);
+  if (!isLatinLetter(previousChar)) {
+    return false;
+  }
+
+  if (isLatinLetter(nextChar)) {
+    return true;
+  }
+
+  return (
+    !nextChar ||
+    WHITESPACE_REGEX.test(nextChar) ||
+    PUNCTUATION_REGEX.test(nextChar)
+  );
 }
 
 function splitPunctuationChunks(value) {
@@ -82,10 +105,7 @@ function splitPunctuationChunks(value) {
       continue;
     }
 
-    if (
-      isWrappablePunctuation(ch) &&
-      !isEnglishInWordApostrophe(chars, index)
-    ) {
+    if (isWrappablePunctuation(ch) && !isEnglishWordApostrophe(chars, index)) {
       if (textBuffer) {
         parts.push({ type: 'text', value: textBuffer });
         textBuffer = '';
@@ -287,7 +307,7 @@ export default function rehypeLangEn(options = {}) {
           type: 'element',
           tagName,
           properties: { className: markClassList },
-          children: [{ type: 'text', value: part.value }]
+          children: [{ type: 'text', value: part.value }],
         };
       });
 
