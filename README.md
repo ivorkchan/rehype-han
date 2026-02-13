@@ -23,7 +23,7 @@ const file = await unified()
   .process('<p>Mom\'s note——“中文”</p>');
 
 console.log(String(file));
-// => <p>Mom's note<span class="cjk-punc">——</span><span class="cjk-punc adj-l">“</span>中文<span class="cjk-punc">”</span></p>
+// => <p>Mom's note<span class="cjk-punc adj-l">——</span><span class="cjk-punc">“</span>中文<span class="cjk-punc">”</span></p>
 ```
 
 ## Options
