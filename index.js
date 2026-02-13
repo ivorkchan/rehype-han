@@ -11,18 +11,57 @@ const DEFAULT_IGNORE_TAGS = [
 ];
 
 const PUNCTUATION_REGEX = /\p{P}/u;
+const LATIN_LETTER_REGEX = /\p{Script=Latin}/u;
 const EXCLUDED_PUNCTUATION = new Set(['-', '–', '—']);
+const ENGLISH_IN_WORD_APOSTROPHES = new Set(["'", '’']);
+const EM_DASH = '—';
+const DOUBLE_EM_DASH = '——';
+const LEFT_COMPRESSION_MARKS = new Set(['“', '‘', '《', '「', '『']);
+const RIGHT_COMPRESSION_MARKS = new Set(['”', '’', '》', '」', '』']);
+const ADJ_LEFT_CLASS = 'adj-l';
+const ADJ_RIGHT_CLASS = 'adj-r';
 
 function isWrappablePunctuation(ch) {
   return PUNCTUATION_REGEX.test(ch) && !EXCLUDED_PUNCTUATION.has(ch);
 }
 
+function isLatinLetter(ch) {
+  return Boolean(ch) && LATIN_LETTER_REGEX.test(ch);
+}
+
+function isEnglishInWordApostrophe(chars, index) {
+  const ch = chars[index];
+
+  if (!ENGLISH_IN_WORD_APOSTROPHES.has(ch)) {
+    return false;
+  }
+
+  return isLatinLetter(chars[index - 1]) && isLatinLetter(chars[index + 1]);
+}
+
 function splitPunctuationChunks(value) {
+  const chars = Array.from(value);
   const parts = [];
   let textBuffer = '';
 
-  for (const ch of value) {
-    if (isWrappablePunctuation(ch)) {
+  for (let index = 0; index < chars.length; index += 1) {
+    const ch = chars[index];
+
+    if (ch === EM_DASH && chars[index + 1] === EM_DASH) {
+      if (textBuffer) {
+        parts.push({ type: 'text', value: textBuffer });
+        textBuffer = '';
+      }
+
+      parts.push({ type: 'punctuation', value: DOUBLE_EM_DASH });
+      index += 1;
+      continue;
+    }
+
+    if (
+      isWrappablePunctuation(ch) &&
+      !isEnglishInWordApostrophe(chars, index)
+    ) {
       if (textBuffer) {
         parts.push({ type: 'text', value: textBuffer });
         textBuffer = '';
@@ -40,6 +79,47 @@ function splitPunctuationChunks(value) {
   }
 
   return parts;
+}
+
+function getAdjacencyClasses(parts) {
+  const adjacencyClasses = new Map();
+
+  function addAdjacencyClass(index, className) {
+    const classes = adjacencyClasses.get(index);
+
+    if (classes) {
+      classes.add(className);
+      return;
+    }
+
+    adjacencyClasses.set(index, new Set([className]));
+  }
+
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index];
+
+    if (part.type !== 'punctuation') {
+      continue;
+    }
+
+    if (LEFT_COMPRESSION_MARKS.has(part.value)) {
+      const leftNeighbor = parts[index - 1];
+
+      if (leftNeighbor && leftNeighbor.type === 'punctuation') {
+        addAdjacencyClass(index - 1, ADJ_LEFT_CLASS);
+      }
+    }
+
+    if (RIGHT_COMPRESSION_MARKS.has(part.value)) {
+      const rightNeighbor = parts[index + 1];
+
+      if (rightNeighbor && rightNeighbor.type === 'punctuation') {
+        addAdjacencyClass(index + 1, ADJ_RIGHT_CLASS);
+      }
+    }
+  }
+
+  return adjacencyClasses;
 }
 
 function toClassList(className) {
@@ -81,7 +161,7 @@ export default function rehypeLangEn(options = {}) {
   const className =
     typeof options.className === 'string' && options.className.trim()
       ? options.className.trim()
-      : 'lang-en';
+      : 'cjk-punc';
 
   const tagName =
     typeof options.tagName === 'string' && options.tagName.trim()
@@ -117,20 +197,32 @@ export default function rehypeLangEn(options = {}) {
       }
 
       const parts = splitPunctuationChunks(node.value);
+      const adjacencyClasses = getAdjacencyClasses(parts);
 
       if (parts.length === 1 && parts[0].type === 'text') {
         return;
       }
 
-      const replacement = parts.map((part) => {
+      const replacement = parts.map((part, partIndex) => {
         if (part.type === 'text') {
           return { type: 'text', value: part.value };
+        }
+
+        const markClassList = classList.slice();
+        const extraClasses = adjacencyClasses.get(partIndex);
+
+        if (extraClasses) {
+          for (const entry of extraClasses) {
+            if (!markClassList.includes(entry)) {
+              markClassList.push(entry);
+            }
+          }
         }
 
         return {
           type: 'element',
           tagName,
-          properties: { className: classList.slice() },
+          properties: { className: markClassList },
           children: [{ type: 'text', value: part.value }]
         };
       });
