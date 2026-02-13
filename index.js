@@ -29,6 +29,7 @@ const ELLIPSIS = '…';
 const DOUBLE_ELLIPSIS = '……';
 const LEFT_COMPRESSION_MARKS = new Set(['“', '‘', '《', '「', '『']);
 const RIGHT_COMPRESSION_MARKS = new Set(['”', '’', '》', '」', '』']);
+const ADJACENCY_TARGET_MARKS = new Set(['，', '。', '？', '！', '；', '：', '、']);
 const ADJ_LEFT_CLASS = 'adj-l';
 const ADJ_RIGHT_CLASS = 'adj-r';
 const ADJ_MIDDLE_CLASS = 'adj-m';
@@ -134,7 +135,11 @@ function getAdjacencyClasses(parts) {
     if (LEFT_COMPRESSION_MARKS.has(part.value)) {
       const leftNeighbor = parts[index - 1];
 
-      if (leftNeighbor && leftNeighbor.type === 'punctuation') {
+      if (
+        leftNeighbor &&
+        leftNeighbor.type === 'punctuation' &&
+        ADJACENCY_TARGET_MARKS.has(leftNeighbor.value)
+      ) {
         addAdjacencyClass(index - 1, ADJ_LEFT_CLASS);
       }
     }
@@ -155,11 +160,18 @@ function getAdjacencyClasses(parts) {
           continue;
         }
 
-        addAdjacencyClass(leftNeighborIndex, ADJ_LEFT_CLASS);
+        if (ADJACENCY_TARGET_MARKS.has(leftNeighbor.value)) {
+          addAdjacencyClass(leftNeighborIndex, ADJ_LEFT_CLASS);
+        }
+
         break;
       }
 
-      if (rightNeighbor && rightNeighbor.type === 'punctuation') {
+      if (
+        rightNeighbor &&
+        rightNeighbor.type === 'punctuation' &&
+        ADJACENCY_TARGET_MARKS.has(rightNeighbor.value)
+      ) {
         addAdjacencyClass(index + 1, ADJ_RIGHT_CLASS);
       }
     }
