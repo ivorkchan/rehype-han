@@ -63,6 +63,24 @@ test('applies adj-l to only the left neighbor in the required `。“` example',
   assert.equal(output, expected);
 });
 
+test("applies adj-l to the left neighbor in the required quote-right example", async () => {
+  const input = "<p>。”</p>";
+  const expected = "<p><span class=\"cjk-punc adj-l\">。</span><span class=\"cjk-punc\">”</span></p>";
+
+  const output = await render(input);
+
+  assert.equal(output, expected);
+});
+
+test("preserves right-neighbor adj-r in the control quote-right exclamation example", async () => {
+  const input = "<p>”！</p>";
+  const expected = "<p><span class=\"cjk-punc\">”</span><span class=\"cjk-punc adj-r\">！</span></p>";
+
+  const output = await render(input);
+
+  assert.equal(output, expected);
+});
+
 test('applies adj-l to both neighboring marks in the required `。“‘` example', async () => {
   const input = '<p>。“‘</p>';
   const expected = '<p><span class="cjk-punc adj-l">。</span><span class="cjk-punc adj-l">“</span><span class="cjk-punc">‘</span></p>';
@@ -72,9 +90,9 @@ test('applies adj-l to both neighboring marks in the required `。“‘` exampl
   assert.equal(output, expected);
 });
 
-test('applies adj-l/adj-r to outer marks in the required `“‘文本’”` example', async () => {
+test("applies adj-l and adj-r around the required nested quote example", async () => {
   const input = '<p>“‘文本’”</p>';
-  const expected = '<p><span class="cjk-punc adj-l">“</span><span class="cjk-punc">‘</span>文本<span class="cjk-punc">’</span><span class="cjk-punc adj-r">”</span></p>';
+  const expected = "<p><span class=\"cjk-punc adj-l\">“</span><span class=\"cjk-punc\">‘</span>文本<span class=\"cjk-punc adj-l\">’</span><span class=\"cjk-punc adj-r\">”</span></p>";
 
   const output = await render(input);
 
@@ -92,7 +110,7 @@ test('uses the default left quote/bracket adjacency subset', async () => {
 
 test('uses the default right quote/bracket adjacency subset', async () => {
   const input = '<p>』」》’”，</p>';
-  const expected = '<p><span class="cjk-punc">』</span><span class="cjk-punc adj-r">」</span><span class="cjk-punc adj-r">》</span><span class="cjk-punc adj-r">’</span><span class="cjk-punc adj-r">”</span><span class="cjk-punc adj-r">，</span></p>';
+  const expected = "<p><span class=\"cjk-punc adj-l\">』</span><span class=\"cjk-punc adj-r adj-l\">」</span><span class=\"cjk-punc adj-r adj-l\">》</span><span class=\"cjk-punc adj-r adj-l\">’</span><span class=\"cjk-punc adj-r\">”</span><span class=\"cjk-punc adj-r\">，</span></p>";
 
   const output = await render(input);
 

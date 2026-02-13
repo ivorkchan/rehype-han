@@ -111,7 +111,12 @@ function getAdjacencyClasses(parts) {
     }
 
     if (RIGHT_COMPRESSION_MARKS.has(part.value)) {
+      const leftNeighbor = parts[index - 1];
       const rightNeighbor = parts[index + 1];
+
+      if (leftNeighbor && leftNeighbor.type === 'punctuation') {
+        addAdjacencyClass(index - 1, ADJ_LEFT_CLASS);
+      }
 
       if (rightNeighbor && rightNeighbor.type === 'punctuation') {
         addAdjacencyClass(index + 1, ADJ_RIGHT_CLASS);
