@@ -68,6 +68,15 @@ function hasIgnoredAncestor(ancestors, ignoreTags) {
   );
 }
 
+function hasWrapperAncestor(ancestors, tagName, className) {
+  return ancestors.some(
+    (node) =>
+      node.type === 'element' &&
+      node.tagName === tagName &&
+      hasClassName(node.properties, className)
+  );
+}
+
 export default function rehypeLangEn(options = {}) {
   const className =
     typeof options.className === 'string' && options.className.trim()
@@ -99,7 +108,7 @@ export default function rehypeLangEn(options = {}) {
         return;
       }
 
-      if (parent.tagName === tagName && hasClassName(parent.properties, className)) {
+      if (hasWrapperAncestor(ancestors, tagName, className)) {
         return;
       }
 
