@@ -20,6 +20,7 @@ const LEFT_COMPRESSION_MARKS = new Set(['“', '‘', '《', '「', '『']);
 const RIGHT_COMPRESSION_MARKS = new Set(['”', '’', '》', '」', '』']);
 const ADJ_LEFT_CLASS = 'adj-l';
 const ADJ_RIGHT_CLASS = 'adj-r';
+const ADJ_MIDDLE_CLASS = 'adj-m';
 
 function isWrappablePunctuation(ch) {
   return PUNCTUATION_REGEX.test(ch) && !EXCLUDED_PUNCTUATION.has(ch);
@@ -121,6 +122,12 @@ function getAdjacencyClasses(parts) {
       if (rightNeighbor && rightNeighbor.type === 'punctuation') {
         addAdjacencyClass(index + 1, ADJ_RIGHT_CLASS);
       }
+    }
+  }
+
+  for (const [index, classes] of adjacencyClasses) {
+    if (classes.has(ADJ_LEFT_CLASS) && classes.has(ADJ_RIGHT_CLASS)) {
+      adjacencyClasses.set(index, new Set([ADJ_MIDDLE_CLASS]));
     }
   }
 
