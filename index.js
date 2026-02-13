@@ -12,10 +12,21 @@ const DEFAULT_IGNORE_TAGS = [
 
 const PUNCTUATION_REGEX = /\p{P}/u;
 const LATIN_LETTER_REGEX = /\p{Script=Latin}/u;
-const EXCLUDED_PUNCTUATION = new Set(['-', '–', '—']);
+const EXCLUDED_PUNCTUATION = new Set([
+  '-',
+  '–',
+  '—',
+  '%',
+  '％',
+  '﹪',
+  '‰',
+  '‱'
+]);
 const ENGLISH_IN_WORD_APOSTROPHES = new Set(["'", '’']);
 const EM_DASH = '—';
 const DOUBLE_EM_DASH = '——';
+const ELLIPSIS = '…';
+const DOUBLE_ELLIPSIS = '……';
 const LEFT_COMPRESSION_MARKS = new Set(['“', '‘', '《', '「', '『']);
 const RIGHT_COMPRESSION_MARKS = new Set(['”', '’', '》', '」', '』']);
 const ADJ_LEFT_CLASS = 'adj-l';
@@ -55,6 +66,17 @@ function splitPunctuationChunks(value) {
       }
 
       parts.push({ type: 'punctuation', value: DOUBLE_EM_DASH });
+      index += 1;
+      continue;
+    }
+
+    if (ch === ELLIPSIS && chars[index + 1] === ELLIPSIS) {
+      if (textBuffer) {
+        parts.push({ type: 'text', value: textBuffer });
+        textBuffer = '';
+      }
+
+      parts.push({ type: 'punctuation', value: DOUBLE_ELLIPSIS });
       index += 1;
       continue;
     }

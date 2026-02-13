@@ -36,6 +36,24 @@ test('wraps exactly two em dashes as one token and leaves a third em dash unwrap
   assert.equal(output, expected);
 });
 
+test('treats double CJK ellipsis as a single punctuation token', async () => {
+  const input = '<p>甲……乙</p>';
+  const expected = '<p>甲<span class="cjk-punc">……</span>乙</p>';
+
+  const output = await render(input);
+
+  assert.equal(output, expected);
+});
+
+test('keeps percent-like signs unwrapped in decimal examples', async () => {
+  const input = '<p>0.5% 0.5％ 0.5﹪ 0.5‰ 0.5‱</p>';
+  const expected = '<p>0<span class="cjk-punc">.</span>5% 0<span class="cjk-punc">.</span>5％ 0<span class="cjk-punc">.</span>5﹪ 0<span class="cjk-punc">.</span>5‰ 0<span class="cjk-punc">.</span>5‱</p>';
+
+  const output = await render(input);
+
+  assert.equal(output, expected);
+});
+
 test('does not wrap single hyphen-minus, en dash, or em dash', async () => {
   const input = '<p>A-B–C—D,。</p>';
   const expected = '<p>A-B–C—D<span class="cjk-punc">,</span><span class="cjk-punc">。</span></p>';
