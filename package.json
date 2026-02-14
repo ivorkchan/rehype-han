@@ -1,6 +1,6 @@
 {
   "name": "rehype-han",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Rehype plugin to wrap text segments with proper tags.",
   "type": "module",
   "main": "./index.js",
