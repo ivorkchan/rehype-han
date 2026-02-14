@@ -18,10 +18,10 @@ async function render(html, options) {
   return String(file);
 }
 
-test('wraps ASCII and CJK/full-width punctuation with the default class', async () => {
-  const input = '<p>A,B。C！D「E」F（G）H</p>';
+test('wraps full-width/CJK punctuation and ignores ASCII punctuation', async () => {
+  const input = '<p>A,B。C!D「E」F（G）H</p>';
   const expected =
-    '<p>A<span class="cjk-punc">,</span>B<span class="cjk-punc">。</span>C<span class="cjk-punc">！</span>D<span class="cjk-punc">「</span>E<span class="cjk-punc">」</span>F<span class="cjk-punc">（</span>G<span class="cjk-punc">）</span>H</p>';
+    '<p>A,B<span class="cjk-punc">。</span>C!D<span class="cjk-punc">「</span>E<span class="cjk-punc">」</span>F<span class="cjk-punc">（</span>G<span class="cjk-punc">）</span>H</p>';
 
   const output = await render(input);
 
@@ -52,7 +52,7 @@ test('keeps each percent-like sign unwrapped in decimal examples', async () => {
 
   for (const sign of percentLikeSigns) {
     const input = '<p>0.5' + sign + '</p>';
-    const expected = '<p>0<span class="cjk-punc">.</span>5' + sign + '</p>';
+    const expected = '<p>0.5' + sign + '</p>';
     const output = await render(input);
 
     assert.equal(output, expected);
@@ -62,7 +62,7 @@ test('keeps each percent-like sign unwrapped in decimal examples', async () => {
 test('does not wrap single hyphen-minus, en dash, or em dash', async () => {
   const input = '<p>A-B–C—D,。</p>';
   const expected =
-    '<p>A-B–C—D<span class="cjk-punc">,</span><span class="cjk-punc">。</span></p>';
+    '<p>A-B–C—D,<span class="cjk-punc">。</span></p>';
 
   const output = await render(input);
 
@@ -71,8 +71,7 @@ test('does not wrap single hyphen-minus, en dash, or em dash', async () => {
 
 test('does not wrap in-word Latin apostrophes', async () => {
   const input = "<p>Mom's, I'd, we’re.</p>";
-  const expected =
-    '<p>Mom\'s<span class="cjk-punc">,</span> I\'d<span class="cjk-punc">,</span> we’re<span class="cjk-punc">.</span></p>';
+  const expected = "<p>Mom's, I'd, we’re.</p>";
 
   const output = await render(input);
 
@@ -81,8 +80,17 @@ test('does not wrap in-word Latin apostrophes', async () => {
 
 test('does not wrap trailing Latin apostrophes before spaces, punctuation, or end', async () => {
   const input = "<p>students' work, students', teachers’</p>";
+  const expected = "<p>students' work, students', teachers’</p>";
+
+  const output = await render(input);
+
+  assert.equal(output, expected);
+});
+
+test('distinguishes half-width and full-width commas', async () => {
+  const input = '<p>read, write， and blog。</p>';
   const expected =
-    '<p>students\' work<span class="cjk-punc">,</span> students\'<span class="cjk-punc">,</span> teachers’</p>';
+    '<p>read, write<span class="cjk-punc">，</span> and blog<span class="cjk-punc">。</span></p>';
 
   const output = await render(input);
 
@@ -229,8 +237,7 @@ test('adds adjacency classes on top of a custom className', async () => {
 
 test('supports configurable className and tagName options', async () => {
   const input = '<p>A,B。</p>';
-  const expected =
-    '<p>A<i class="han-punc custom">,</i>B<i class="han-punc custom">。</i></p>';
+  const expected = '<p>A,B<i class="han-punc custom">。</i></p>';
 
   const output = await render(input, {
     className: 'han-punc custom',
@@ -242,8 +249,7 @@ test('supports configurable className and tagName options', async () => {
 
 test('respects ignoreTags option', async () => {
   const input = '<p><em>A,B。</em>C,D。</p>';
-  const expected =
-    '<p><em>A,B。</em>C<span class="cjk-punc">,</span>D<span class="cjk-punc">。</span></p>';
+  const expected = '<p><em>A,B。</em>C,D<span class="cjk-punc">。</span></p>';
 
   const output = await render(input, { ignoreTags: ['em'] });
 

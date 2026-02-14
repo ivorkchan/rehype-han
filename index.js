@@ -43,8 +43,16 @@ const ADJ_LEFT_CLASS = 'adj-l';
 const ADJ_RIGHT_CLASS = 'adj-r';
 const ADJ_MIDDLE_CLASS = 'adj-m';
 
+function isHalfWidthAsciiPunctuation(ch) {
+  return Boolean(ch) && ch.charCodeAt(0) <= 0x7f;
+}
+
 function isWrappablePunctuation(ch) {
-  return PUNCTUATION_REGEX.test(ch) && !EXCLUDED_PUNCTUATION.has(ch);
+  return (
+    PUNCTUATION_REGEX.test(ch) &&
+    !isHalfWidthAsciiPunctuation(ch) &&
+    !EXCLUDED_PUNCTUATION.has(ch)
+  );
 }
 
 function isLatinLetter(ch) {

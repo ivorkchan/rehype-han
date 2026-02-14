@@ -23,7 +23,7 @@ const file = await unified()
   .process("<p>Mom's note——“中文”</p>");
 
 console.log(String(file));
-// => <p>Mom's note——</span><span class="cjk-punc">“</span>中文<span class="cjk-punc">”</span></p>
+// => <p>Mom's note——<span class="cjk-punc">“</span>中文<span class="cjk-punc">”</span></p>
 ```
 
 ## Options
@@ -34,7 +34,7 @@ console.log(String(file));
 
 ## Behavior
 
-- Wrapping targets punctuation from Unicode `\p{P}` (including ASCII and full-width/CJK variants).
+- Wrapping targets non-ASCII punctuation from Unicode `\p{P}` (full-width/CJK marks); ASCII punctuation is ignored.
 - Exactly two consecutive em dashes (`——`) are wrapped as one token.
 - Exactly two consecutive CJK ellipsis characters (`……`) are wrapped as one token.
 - Single `-`, `–`, and `—` are intentionally excluded and never wrapped.
