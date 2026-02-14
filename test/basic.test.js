@@ -61,8 +61,7 @@ test('keeps each percent-like sign unwrapped in decimal examples', async () => {
 
 test('does not wrap single hyphen-minus, en dash, or em dash', async () => {
   const input = '<p>A-B–C—D,。</p>';
-  const expected =
-    '<p>A-B–C—D,<span class="cjk-punc">。</span></p>';
+  const expected = '<p>A-B–C—D,<span class="cjk-punc">。</span></p>';
 
   const output = await render(input);
 
