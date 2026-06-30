@@ -18,9 +18,10 @@ async function render(html, options) {
   return String(file);
 }
 
-test('wraps ASCII and CJK/full-width punctuation with the default class', async () => {
-  const input = '<p>A,B。C！D「E」F（G）H</p>';
-  const expected = '<p>A<span class="cjk-punc">,</span>B<span class="cjk-punc">。</span>C<span class="cjk-punc">！</span>D<span class="cjk-punc">「</span>E<span class="cjk-punc">」</span>F<span class="cjk-punc">（</span>G<span class="cjk-punc">）</span>H</p>';
+test('wraps full-width/CJK punctuation and ignores ASCII punctuation', async () => {
+  const input = '<p>A,B。C!D「E」F（G）H</p>';
+  const expected =
+    '<p>A,B<span class="cjk-punc">。</span>C!D<span class="cjk-punc">「</span>E<span class="cjk-punc">」</span>F<span class="cjk-punc">（</span>G<span class="cjk-punc">）</span>H</p>';
 
   const output = await render(input);
 
@@ -29,16 +30,38 @@ test('wraps ASCII and CJK/full-width punctuation with the default class', async 
 
 test('wraps exactly two em dashes as one token and leaves a third em dash unwrapped', async () => {
   const input = '<p>甲——乙，甲———乙。</p>';
-  const expected = '<p>甲<span class="cjk-punc">——</span>乙<span class="cjk-punc">，</span>甲<span class="cjk-punc">——</span>—乙<span class="cjk-punc">。</span></p>';
+  const expected =
+    '<p>甲<span class="cjk-punc">——</span>乙<span class="cjk-punc">，</span>甲<span class="cjk-punc">——</span>—乙<span class="cjk-punc">。</span></p>';
 
   const output = await render(input);
 
   assert.equal(output, expected);
 });
 
+test('treats double CJK ellipsis as a single punctuation token', async () => {
+  const input = '<p>甲……乙</p>';
+  const expected = '<p>甲<span class="cjk-punc">……</span>乙</p>';
+
+  const output = await render(input);
+
+  assert.equal(output, expected);
+});
+
+test('keeps each percent-like sign unwrapped in decimal examples', async () => {
+  const percentLikeSigns = ['%', '％', '﹪', '‰', '‱'];
+
+  for (const sign of percentLikeSigns) {
+    const input = '<p>0.5' + sign + '</p>';
+    const expected = '<p>0.5' + sign + '</p>';
+    const output = await render(input);
+
+    assert.equal(output, expected);
+  }
+});
+
 test('does not wrap single hyphen-minus, en dash, or em dash', async () => {
   const input = '<p>A-B–C—D,。</p>';
-  const expected = '<p>A-B–C—D<span class="cjk-punc">,</span><span class="cjk-punc">。</span></p>';
+  const expected = '<p>A-B–C—D,<span class="cjk-punc">。</span></p>';
 
   const output = await render(input);
 
@@ -46,8 +69,27 @@ test('does not wrap single hyphen-minus, en dash, or em dash', async () => {
 });
 
 test('does not wrap in-word Latin apostrophes', async () => {
-  const input = '<p>Mom\'s, I\'d, we’re.</p>';
-  const expected = '<p>Mom\'s<span class="cjk-punc">,</span> I\'d<span class="cjk-punc">,</span> we’re<span class="cjk-punc">.</span></p>';
+  const input = "<p>Mom's, I'd, we’re.</p>";
+  const expected = "<p>Mom's, I'd, we’re.</p>";
+
+  const output = await render(input);
+
+  assert.equal(output, expected);
+});
+
+test('does not wrap trailing Latin apostrophes before spaces, punctuation, or end', async () => {
+  const input = "<p>students' work, students', teachers’</p>";
+  const expected = "<p>students' work, students', teachers’</p>";
+
+  const output = await render(input);
+
+  assert.equal(output, expected);
+});
+
+test('distinguishes half-width and full-width commas', async () => {
+  const input = '<p>read, write， and blog。</p>';
+  const expected =
+    '<p>read, write<span class="cjk-punc">，</span> and blog<span class="cjk-punc">。</span></p>';
 
   const output = await render(input);
 
@@ -56,25 +98,106 @@ test('does not wrap in-word Latin apostrophes', async () => {
 
 test('applies adj-l to only the left neighbor in the required `。“` example', async () => {
   const input = '<p>。“</p>';
-  const expected = '<p><span class="cjk-punc adj-l">。</span><span class="cjk-punc">“</span></p>';
+  const expected =
+    '<p><span class="cjk-punc adj-l">。</span><span class="cjk-punc">“</span></p>';
 
   const output = await render(input);
 
   assert.equal(output, expected);
 });
 
-test('applies adj-l to both neighboring marks in the required `。“‘` example', async () => {
+test('applies adj-l to the left neighbor in the required quote-right example', async () => {
+  const input = '<p>。”</p>';
+  const expected =
+    '<p><span class="cjk-punc adj-l">。</span><span class="cjk-punc">”</span></p>';
+
+  const output = await render(input);
+
+  assert.equal(output, expected);
+});
+
+test('applies adjacency classes only to 点号 targets', async () => {
+  const adjacencyTargets = ['，', '。', '？', '！', '；', '：', '、'];
+
+  for (const mark of adjacencyTargets) {
+    const leftOutput = await render('<p>' + mark + '“</p>');
+    const leftExpected =
+      '<p><span class="cjk-punc adj-l">' +
+      mark +
+      '</span><span class="cjk-punc">“</span></p>';
+
+    assert.equal(leftOutput, leftExpected);
+
+    const rightOutput = await render('<p>”' + mark + '</p>');
+    const rightExpected =
+      '<p><span class="cjk-punc">”</span><span class="cjk-punc adj-r">' +
+      mark +
+      '</span></p>';
+
+    assert.equal(rightOutput, rightExpected);
+  }
+
+  const nonTargetOutput = await render('<p>”……</p>');
+  const nonTargetExpected =
+    '<p><span class="cjk-punc">”</span><span class="cjk-punc">……</span></p>';
+
+  assert.equal(nonTargetOutput, nonTargetExpected);
+});
+
+test('does not assign adjacency classes in the required `……”` example', async () => {
+  const input = '<p>……”</p>';
+  const expected =
+    '<p><span class="cjk-punc">……</span><span class="cjk-punc">”</span></p>';
+
+  const output = await render(input);
+
+  assert.equal(output, expected);
+});
+
+test('preserves right-neighbor adj-r in the control quote-right exclamation example', async () => {
+  const input = '<p>”！</p>';
+  const expected =
+    '<p><span class="cjk-punc">”</span><span class="cjk-punc adj-r">！</span></p>';
+
+  const output = await render(input);
+
+  assert.equal(output, expected);
+});
+
+test('normalizes dual-side adjacency to adj-m in the required `”。“` example', async () => {
+  const input = '<p>”。“</p>';
+  const expected =
+    '<p><span class="cjk-punc">”</span><span class="cjk-punc adj-m">。</span><span class="cjk-punc">“</span></p>';
+
+  const output = await render(input);
+
+  assert.equal(output, expected);
+});
+
+test('applies adj-l only to 点号 targets in the required `。“‘` example', async () => {
   const input = '<p>。“‘</p>';
-  const expected = '<p><span class="cjk-punc adj-l">。</span><span class="cjk-punc adj-l">“</span><span class="cjk-punc">‘</span></p>';
+  const expected =
+    '<p><span class="cjk-punc adj-l">。</span><span class="cjk-punc">“</span><span class="cjk-punc">‘</span></p>';
 
   const output = await render(input);
 
   assert.equal(output, expected);
 });
 
-test('applies adj-l/adj-r to outer marks in the required `“‘文本’”` example', async () => {
+test('does not assign adjacency classes to quote-only punctuation in nested quotes', async () => {
   const input = '<p>“‘文本’”</p>';
-  const expected = '<p><span class="cjk-punc adj-l">“</span><span class="cjk-punc">‘</span>文本<span class="cjk-punc">’</span><span class="cjk-punc adj-r">”</span></p>';
+  const expected =
+    '<p><span class="cjk-punc">“</span><span class="cjk-punc">‘</span>文本<span class="cjk-punc">’</span><span class="cjk-punc">”</span></p>';
+
+  const output = await render(input);
+
+  assert.equal(output, expected);
+});
+
+test('locks nested right-mark skipping for 。』」', async () => {
+  const input = '<p>。』」</p>';
+  const expected =
+    '<p><span class="cjk-punc adj-l">。</span><span class="cjk-punc">』</span><span class="cjk-punc">」</span></p>';
 
   const output = await render(input);
 
@@ -83,16 +206,18 @@ test('applies adj-l/adj-r to outer marks in the required `“‘文本’”` ex
 
 test('uses the default left quote/bracket adjacency subset', async () => {
   const input = '<p>。“‘《「『</p>';
-  const expected = '<p><span class="cjk-punc adj-l">。</span><span class="cjk-punc adj-l">“</span><span class="cjk-punc adj-l">‘</span><span class="cjk-punc adj-l">《</span><span class="cjk-punc adj-l">「</span><span class="cjk-punc">『</span></p>';
+  const expected =
+    '<p><span class="cjk-punc adj-l">。</span><span class="cjk-punc">“</span><span class="cjk-punc">‘</span><span class="cjk-punc">《</span><span class="cjk-punc">「</span><span class="cjk-punc">『</span></p>';
 
   const output = await render(input);
 
   assert.equal(output, expected);
 });
 
-test('uses the default right quote/bracket adjacency subset', async () => {
+test('uses the default right quote/bracket adjacency subset with nested-left skipping', async () => {
   const input = '<p>』」》’”，</p>';
-  const expected = '<p><span class="cjk-punc">』</span><span class="cjk-punc adj-r">」</span><span class="cjk-punc adj-r">》</span><span class="cjk-punc adj-r">’</span><span class="cjk-punc adj-r">”</span><span class="cjk-punc adj-r">，</span></p>';
+  const expected =
+    '<p><span class="cjk-punc">』</span><span class="cjk-punc">」</span><span class="cjk-punc">》</span><span class="cjk-punc">’</span><span class="cjk-punc">”</span><span class="cjk-punc adj-r">，</span></p>';
 
   const output = await render(input);
 
@@ -101,7 +226,8 @@ test('uses the default right quote/bracket adjacency subset', async () => {
 
 test('adds adjacency classes on top of a custom className', async () => {
   const input = '<p>。“‘</p>';
-  const expected = '<p><span class="han-punc custom adj-l">。</span><span class="han-punc custom adj-l">“</span><span class="han-punc custom">‘</span></p>';
+  const expected =
+    '<p><span class="han-punc custom adj-l">。</span><span class="han-punc custom">“</span><span class="han-punc custom">‘</span></p>';
 
   const output = await render(input, { className: 'han-punc custom' });
 
@@ -110,11 +236,11 @@ test('adds adjacency classes on top of a custom className', async () => {
 
 test('supports configurable className and tagName options', async () => {
   const input = '<p>A,B。</p>';
-  const expected = '<p>A<i class="han-punc custom">,</i>B<i class="han-punc custom">。</i></p>';
+  const expected = '<p>A,B<i class="han-punc custom">。</i></p>';
 
   const output = await render(input, {
     className: 'han-punc custom',
-    tagName: 'i'
+    tagName: 'i',
   });
 
   assert.equal(output, expected);
@@ -122,7 +248,7 @@ test('supports configurable className and tagName options', async () => {
 
 test('respects ignoreTags option', async () => {
   const input = '<p><em>A,B。</em>C,D。</p>';
-  const expected = '<p><em>A,B。</em>C<span class="cjk-punc">,</span>D<span class="cjk-punc">。</span></p>';
+  const expected = '<p><em>A,B。</em>C,D<span class="cjk-punc">。</span></p>';
 
   const output = await render(input, { ignoreTags: ['em'] });
 
@@ -161,12 +287,12 @@ test('fixture regression keeps expected wrappers and adjacency around quote/brac
 
   assert.ok(
     output.includes(
-      '<span class="cjk-punc">》</span><span class="cjk-punc adj-r adj-l">：</span><span class="cjk-punc">「</span>'
+      '<span class="cjk-punc">》</span><span class="cjk-punc adj-m">：</span><span class="cjk-punc">「</span>'
     )
   );
   assert.ok(
     output.includes(
-      '<span class="cjk-punc adj-l">：</span><span class="cjk-punc adj-l">「</span><span class="cjk-punc">《</span>'
+      '<span class="cjk-punc adj-l">：</span><span class="cjk-punc">「</span><span class="cjk-punc">《</span>'
     )
   );
   assert.ok(

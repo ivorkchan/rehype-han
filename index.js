@@ -7,36 +7,80 @@ const DEFAULT_IGNORE_TAGS = [
   'code',
   'pre',
   'kbd',
-  'samp'
+  'samp',
 ];
 
 const PUNCTUATION_REGEX = /\p{P}/u;
 const LATIN_LETTER_REGEX = /\p{Script=Latin}/u;
-const EXCLUDED_PUNCTUATION = new Set(['-', '–', '—']);
+const WHITESPACE_REGEX = /\s/u;
+const EXCLUDED_PUNCTUATION = new Set([
+  '-',
+  '–',
+  '—',
+  '%',
+  '％',
+  '﹪',
+  '‰',
+  '‱',
+]);
 const ENGLISH_IN_WORD_APOSTROPHES = new Set(["'", '’']);
 const EM_DASH = '—';
 const DOUBLE_EM_DASH = '——';
-const LEFT_COMPRESSION_MARKS = new Set(['“', '‘', '《', '「', '『']);
-const RIGHT_COMPRESSION_MARKS = new Set(['”', '’', '》', '」', '』']);
+const ELLIPSIS = '…';
+const DOUBLE_ELLIPSIS = '……';
+const LEFT_COMPRESSION_MARKS = new Set(['“', '‘', '《', '「', '『', '（']);
+const RIGHT_COMPRESSION_MARKS = new Set(['”', '’', '》', '」', '』', '）']);
+const ADJACENCY_TARGET_MARKS = new Set([
+  '，',
+  '。',
+  '？',
+  '！',
+  '；',
+  '：',
+  '、',
+]);
 const ADJ_LEFT_CLASS = 'adj-l';
 const ADJ_RIGHT_CLASS = 'adj-r';
+const ADJ_MIDDLE_CLASS = 'adj-m';
+
+function isHalfWidthAsciiPunctuation(ch) {
+  return Boolean(ch) && ch.charCodeAt(0) <= 0x7f;
+}
 
 function isWrappablePunctuation(ch) {
-  return PUNCTUATION_REGEX.test(ch) && !EXCLUDED_PUNCTUATION.has(ch);
+  return (
+    PUNCTUATION_REGEX.test(ch) &&
+    !isHalfWidthAsciiPunctuation(ch) &&
+    !EXCLUDED_PUNCTUATION.has(ch)
+  );
 }
 
 function isLatinLetter(ch) {
   return Boolean(ch) && LATIN_LETTER_REGEX.test(ch);
 }
 
-function isEnglishInWordApostrophe(chars, index) {
+function isEnglishWordApostrophe(chars, index) {
   const ch = chars[index];
+  const previousChar = chars[index - 1];
+  const nextChar = chars[index + 1];
 
   if (!ENGLISH_IN_WORD_APOSTROPHES.has(ch)) {
     return false;
   }
 
-  return isLatinLetter(chars[index - 1]) && isLatinLetter(chars[index + 1]);
+  if (!isLatinLetter(previousChar)) {
+    return false;
+  }
+
+  if (isLatinLetter(nextChar)) {
+    return true;
+  }
+
+  return (
+    !nextChar ||
+    WHITESPACE_REGEX.test(nextChar) ||
+    PUNCTUATION_REGEX.test(nextChar)
+  );
 }
 
 function splitPunctuationChunks(value) {
@@ -58,10 +102,18 @@ function splitPunctuationChunks(value) {
       continue;
     }
 
-    if (
-      isWrappablePunctuation(ch) &&
-      !isEnglishInWordApostrophe(chars, index)
-    ) {
+    if (ch === ELLIPSIS && chars[index + 1] === ELLIPSIS) {
+      if (textBuffer) {
+        parts.push({ type: 'text', value: textBuffer });
+        textBuffer = '';
+      }
+
+      parts.push({ type: 'punctuation', value: DOUBLE_ELLIPSIS });
+      index += 1;
+      continue;
+    }
+
+    if (isWrappablePunctuation(ch) && !isEnglishWordApostrophe(chars, index)) {
       if (textBuffer) {
         parts.push({ type: 'text', value: textBuffer });
         textBuffer = '';
@@ -95,6 +147,12 @@ function getAdjacencyClasses(parts) {
     adjacencyClasses.set(index, new Set([className]));
   }
 
+  function isQuoteBracketWrapper(value) {
+    return (
+      LEFT_COMPRESSION_MARKS.has(value) || RIGHT_COMPRESSION_MARKS.has(value)
+    );
+  }
+
   for (let index = 0; index < parts.length; index += 1) {
     const part = parts[index];
 
@@ -105,17 +163,51 @@ function getAdjacencyClasses(parts) {
     if (LEFT_COMPRESSION_MARKS.has(part.value)) {
       const leftNeighbor = parts[index - 1];
 
-      if (leftNeighbor && leftNeighbor.type === 'punctuation') {
+      if (
+        leftNeighbor &&
+        leftNeighbor.type === 'punctuation' &&
+        ADJACENCY_TARGET_MARKS.has(leftNeighbor.value)
+      ) {
         addAdjacencyClass(index - 1, ADJ_LEFT_CLASS);
       }
     }
 
     if (RIGHT_COMPRESSION_MARKS.has(part.value)) {
       const rightNeighbor = parts[index + 1];
+      let leftNeighborIndex = index - 1;
 
-      if (rightNeighbor && rightNeighbor.type === 'punctuation') {
+      while (leftNeighborIndex >= 0) {
+        const leftNeighbor = parts[leftNeighborIndex];
+
+        if (leftNeighbor.type !== 'punctuation') {
+          break;
+        }
+
+        if (isQuoteBracketWrapper(leftNeighbor.value)) {
+          leftNeighborIndex -= 1;
+          continue;
+        }
+
+        if (ADJACENCY_TARGET_MARKS.has(leftNeighbor.value)) {
+          addAdjacencyClass(leftNeighborIndex, ADJ_LEFT_CLASS);
+        }
+
+        break;
+      }
+
+      if (
+        rightNeighbor &&
+        rightNeighbor.type === 'punctuation' &&
+        ADJACENCY_TARGET_MARKS.has(rightNeighbor.value)
+      ) {
         addAdjacencyClass(index + 1, ADJ_RIGHT_CLASS);
       }
+    }
+  }
+
+  for (const [index, classes] of adjacencyClasses) {
+    if (classes.has(ADJ_LEFT_CLASS) && classes.has(ADJ_RIGHT_CLASS)) {
+      adjacencyClasses.set(index, new Set([ADJ_MIDDLE_CLASS]));
     }
   }
 
@@ -223,7 +315,7 @@ export default function rehypeLangEn(options = {}) {
           type: 'element',
           tagName,
           properties: { className: markClassList },
-          children: [{ type: 'text', value: part.value }]
+          children: [{ type: 'text', value: part.value }],
         };
       });
 

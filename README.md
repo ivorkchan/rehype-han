@@ -20,10 +20,10 @@ const file = await unified()
   .use(rehypeParse, { fragment: true })
   .use(rehypeHan)
   .use(rehypeStringify)
-  .process('<p>Mom\'s note——“中文”</p>');
+  .process("<p>Mom's note——“中文”</p>");
 
 console.log(String(file));
-// => <p>Mom's note<span class="cjk-punc adj-l">——</span><span class="cjk-punc">“</span>中文<span class="cjk-punc">”</span></p>
+// => <p>Mom's note——<span class="cjk-punc">“</span>中文<span class="cjk-punc">”</span></p>
 ```
 
 ## Options
@@ -34,23 +34,10 @@ console.log(String(file));
 
 ## Behavior
 
-- Wrapping targets punctuation from Unicode `\p{P}` (including ASCII and full-width/CJK variants).
+- Wrapping targets non-ASCII punctuation from Unicode `\p{P}` (full-width/CJK marks); ASCII punctuation is ignored.
 - Exactly two consecutive em dashes (`——`) are wrapped as one token.
+- Exactly two consecutive CJK ellipsis characters (`……`) are wrapped as one token.
 - Single `-`, `–`, and `—` are intentionally excluded and never wrapped.
-- In-word Latin apostrophes are excluded when matching `Latin + (' or ’) + Latin` (for example `Mom's`, `I'd`, `we’re`).
+- Percent-like signs `%`, `％`, `﹪`, `‰`, and `‱` are excluded from wrapping.
+- Latin-word apostrophes are excluded for `Latin + (' or ’) + Latin` and trailing possessives `Latin + (' or ’) + (space, punctuation, or end)` (for example `Mom’s`, `I’d`, `we’re`, `students' work`).
 - Punctuation already inside an existing configured wrapper is not wrapped again.
-
-## Adjacency Classes
-
-When wrappers are adjacent to default quote/bracket marks, extra classes are added to the neighboring punctuation wrapper:
-
-- `adj-l`: mark immediately to the left of one of `“`, `‘`, `《`, `「`, `『`
-- `adj-r`: mark immediately to the right of one of `”`, `’`, `》`, `」`, `』`
-
-These classes are additive on top of `className` (for example `class="cjk-punc adj-l"` or `class="han-punc custom adj-r"`).
-
-Examples:
-
-- `。“` => `。` gets `adj-l`
-- `。“‘` => `。` and `“` get `adj-l`
-- `“‘文本’”` => outer `“` gets `adj-l`, outer `”` gets `adj-r`
