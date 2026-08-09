@@ -1,4 +1,4 @@
-import { visitParents } from 'unist-util-visit-parents';
+import { SKIP, visitParents } from 'unist-util-visit-parents';
 
 const DEFAULT_IGNORE_TAGS = [
   'script',
@@ -10,26 +10,68 @@ const DEFAULT_IGNORE_TAGS = [
   'samp',
 ];
 
+// Elements whose text content cannot hold markup (or is not HTML at all).
+// Wrapping there would leak literal tags into the rendered output, so they are
+// skipped regardless of the `ignoreTags` option.
+const HARD_IGNORE_TAGS = new Set([
+  'script',
+  'style',
+  'textarea',
+  'title',
+  'option',
+  'svg',
+  'math',
+]);
+
 const PUNCTUATION_REGEX = /\p{P}/u;
 const LATIN_LETTER_REGEX = /\p{Script=Latin}/u;
 const WHITESPACE_REGEX = /\s/u;
+const SYMBOL_REGEX = /\p{S}/u;
 const EXCLUDED_PUNCTUATION = new Set([
   '-',
   '–',
   '—',
+  '•',
   '%',
   '％',
   '﹪',
   '‰',
   '‱',
 ]);
-const ENGLISH_IN_WORD_APOSTROPHES = new Set(["'", '’']);
-const EM_DASH = '—';
-const DOUBLE_EM_DASH = '——';
-const ELLIPSIS = '…';
-const DOUBLE_ELLIPSIS = '……';
-const LEFT_COMPRESSION_MARKS = new Set(['“', '‘', '《', '「', '『', '（']);
-const RIGHT_COMPRESSION_MARKS = new Set(['”', '’', '》', '」', '』', '）']);
+const OPENING_SINGLE_QUOTE = '‘';
+const CLOSING_SINGLE_QUOTE = '’';
+const ENGLISH_IN_WORD_APOSTROPHES = new Set(["'", CLOSING_SINGLE_QUOTE]);
+// Marks that only ever appear doubled in Han typography. The doubled form is
+// one token; a lone occurrence keeps whatever the general rules decide.
+const DOUBLED_MARKS = new Set(['—', '…', '⋯']);
+const LEFT_COMPRESSION_MARKS = new Set([
+  '“',
+  '‘',
+  '《',
+  '〈',
+  '「',
+  '『',
+  '（',
+  '【',
+  '〔',
+  '〖',
+  '［',
+  '｛',
+]);
+const RIGHT_COMPRESSION_MARKS = new Set([
+  '”',
+  '’',
+  '》',
+  '〉',
+  '」',
+  '』',
+  '）',
+  '】',
+  '〕',
+  '〗',
+  '］',
+  '｝',
+]);
 const ADJACENCY_TARGET_MARKS = new Set([
   '，',
   '。',
@@ -47,88 +89,109 @@ function isHalfWidthAsciiPunctuation(ch) {
   return Boolean(ch) && ch.charCodeAt(0) <= 0x7f;
 }
 
-function isWrappablePunctuation(ch) {
+// Full-width symbol forms such as ～＋＝＜＞｜＄￥ live in Unicode's
+// Halfwidth and Fullwidth Forms block but are categorized as `S`, not `P`.
+// They still occupy a full em and belong to the Han punctuation font.
+function isFullWidthSymbol(ch) {
+  const codePoint = ch.codePointAt(0);
+
   return (
-    PUNCTUATION_REGEX.test(ch) &&
-    !isHalfWidthAsciiPunctuation(ch) &&
-    !EXCLUDED_PUNCTUATION.has(ch)
+    ((codePoint >= 0xff01 && codePoint <= 0xff60) ||
+      (codePoint >= 0xffe0 && codePoint <= 0xffe6)) &&
+    SYMBOL_REGEX.test(ch)
   );
+}
+
+function isWrappablePunctuation(ch) {
+  if (isHalfWidthAsciiPunctuation(ch) || EXCLUDED_PUNCTUATION.has(ch)) {
+    return false;
+  }
+
+  return PUNCTUATION_REGEX.test(ch) || isFullWidthSymbol(ch);
 }
 
 function isLatinLetter(ch) {
   return Boolean(ch) && LATIN_LETTER_REGEX.test(ch);
 }
 
-function isEnglishWordApostrophe(chars, index) {
+// `strong`: Latin + apostrophe + Latin, which is never a quotation mark.
+// `weak`: a trailing possessive, which is indistinguishable from a closing
+// single quote without knowing whether one is open.
+function classifyApostrophe(chars, index) {
   const ch = chars[index];
-  const previousChar = chars[index - 1];
-  const nextChar = chars[index + 1];
 
   if (!ENGLISH_IN_WORD_APOSTROPHES.has(ch)) {
-    return false;
+    return 'none';
   }
 
-  if (!isLatinLetter(previousChar)) {
-    return false;
+  if (!isLatinLetter(chars[index - 1])) {
+    return 'none';
   }
+
+  const nextChar = chars[index + 1];
 
   if (isLatinLetter(nextChar)) {
-    return true;
+    return 'strong';
   }
 
-  return (
+  if (
     !nextChar ||
     WHITESPACE_REGEX.test(nextChar) ||
     PUNCTUATION_REGEX.test(nextChar)
-  );
+  ) {
+    return 'weak';
+  }
+
+  return 'none';
 }
 
 function splitPunctuationChunks(value) {
   const chars = Array.from(value);
   const parts = [];
   let textBuffer = '';
+  let openSingleQuotes = 0;
+
+  function flushText() {
+    if (textBuffer) {
+      parts.push({ type: 'text', value: textBuffer });
+      textBuffer = '';
+    }
+  }
 
   for (let index = 0; index < chars.length; index += 1) {
     const ch = chars[index];
 
-    if (ch === EM_DASH && chars[index + 1] === EM_DASH) {
-      if (textBuffer) {
-        parts.push({ type: 'text', value: textBuffer });
-        textBuffer = '';
-      }
-
-      parts.push({ type: 'punctuation', value: DOUBLE_EM_DASH });
+    if (DOUBLED_MARKS.has(ch) && chars[index + 1] === ch) {
+      flushText();
+      parts.push({ type: 'punctuation', value: ch + ch });
       index += 1;
       continue;
     }
 
-    if (ch === ELLIPSIS && chars[index + 1] === ELLIPSIS) {
-      if (textBuffer) {
-        parts.push({ type: 'text', value: textBuffer });
-        textBuffer = '';
+    if (isWrappablePunctuation(ch)) {
+      const isClosingQuote =
+        ch === CLOSING_SINGLE_QUOTE && openSingleQuotes > 0;
+      const apostrophe = classifyApostrophe(chars, index);
+      const isApostrophe =
+        apostrophe === 'strong' || (apostrophe === 'weak' && !isClosingQuote);
+
+      if (!isApostrophe) {
+        if (ch === OPENING_SINGLE_QUOTE) {
+          openSingleQuotes += 1;
+        } else if (isClosingQuote) {
+          openSingleQuotes -= 1;
+        }
+
+        flushText();
+        parts.push({ type: 'punctuation', value: ch });
+        continue;
       }
-
-      parts.push({ type: 'punctuation', value: DOUBLE_ELLIPSIS });
-      index += 1;
-      continue;
-    }
-
-    if (isWrappablePunctuation(ch) && !isEnglishWordApostrophe(chars, index)) {
-      if (textBuffer) {
-        parts.push({ type: 'text', value: textBuffer });
-        textBuffer = '';
-      }
-
-      parts.push({ type: 'punctuation', value: ch });
-      continue;
     }
 
     textBuffer += ch;
   }
 
-  if (textBuffer) {
-    parts.push({ type: 'text', value: textBuffer });
-  }
+  flushText();
 
   return parts;
 }
@@ -221,12 +284,11 @@ function toClassList(className) {
     .filter(Boolean);
 }
 
-function hasClassName(properties, className) {
+function hasClassNames(properties, expectedClassNames) {
   if (!properties || !properties.className) {
     return false;
   }
 
-  const expectedClassNames = toClassList(className);
   const classList = Array.isArray(properties.className)
     ? properties.className
     : String(properties.className).split(/\s+/);
@@ -234,53 +296,54 @@ function hasClassName(properties, className) {
   return expectedClassNames.every((entry) => classList.includes(entry));
 }
 
-function hasIgnoredAncestor(ancestors, ignoreTags) {
-  return ancestors.some(
-    (node) => node.type === 'element' && ignoreTags.has(node.tagName)
+function isSkippedElement(node, ignoreTags, tagName, classList) {
+  return (
+    HARD_IGNORE_TAGS.has(node.tagName) ||
+    ignoreTags.has(node.tagName) ||
+    (node.tagName === tagName && hasClassNames(node.properties, classList))
   );
 }
 
-function hasWrapperAncestor(ancestors, tagName, className) {
-  return ancestors.some(
-    (node) =>
-      node.type === 'element' &&
-      node.tagName === tagName &&
-      hasClassName(node.properties, className)
-  );
-}
+export default function rehypeHan(options) {
+  const settings = options || {};
 
-export default function rehypeLangEn(options = {}) {
   const className =
-    typeof options.className === 'string' && options.className.trim()
-      ? options.className.trim()
+    typeof settings.className === 'string' && settings.className.trim()
+      ? settings.className.trim()
       : 'cjk-punc';
 
   const tagName =
-    typeof options.tagName === 'string' && options.tagName.trim()
-      ? options.tagName.trim()
+    typeof settings.tagName === 'string' && settings.tagName.trim()
+      ? settings.tagName.trim()
       : 'span';
 
   const ignoreTags = new Set(
-    Array.isArray(options.ignoreTags) && options.ignoreTags.length > 0
-      ? options.ignoreTags.map((tag) => String(tag))
+    Array.isArray(settings.ignoreTags) && settings.ignoreTags.length > 0
+      ? settings.ignoreTags.map((tag) => String(tag))
       : DEFAULT_IGNORE_TAGS
   );
 
   const classList = toClassList(className);
 
   return (tree) => {
-    visitParents(tree, 'text', (node, ancestors) => {
+    visitParents(tree, (node, ancestors) => {
+      // Pruning at the element level keeps the whole subtree out of the walk,
+      // instead of re-scanning the ancestor chain for every text node in it.
+      if (node.type === 'element') {
+        return isSkippedElement(node, ignoreTags, tagName, classList)
+          ? SKIP
+          : undefined;
+      }
+
+      if (node.type !== 'text') {
+        return;
+      }
+
       const parent = ancestors[ancestors.length - 1];
 
-      if (!parent || parent.type !== 'element') {
-        return;
-      }
-
-      if (hasIgnoredAncestor(ancestors, ignoreTags)) {
-        return;
-      }
-
-      if (hasWrapperAncestor(ancestors, tagName, className)) {
+      // Any parent holding a children array works, including the tree root and
+      // MDX JSX nodes, whose inline content is plain text rather than a `p`.
+      if (!parent || !Array.isArray(parent.children)) {
         return;
       }
 
@@ -289,11 +352,12 @@ export default function rehypeLangEn(options = {}) {
       }
 
       const parts = splitPunctuationChunks(node.value);
-      const adjacencyClasses = getAdjacencyClasses(parts);
 
       if (parts.length === 1 && parts[0].type === 'text') {
         return;
       }
+
+      const adjacencyClasses = getAdjacencyClasses(parts);
 
       const replacement = parts.map((part, partIndex) => {
         if (part.type === 'text') {
@@ -320,11 +384,16 @@ export default function rehypeLangEn(options = {}) {
       });
 
       const nodeIndex = parent.children.indexOf(node);
+
       if (nodeIndex === -1) {
         return;
       }
 
       parent.children.splice(nodeIndex, 1, ...replacement);
+
+      // Resume after the inserted nodes: they are already final, and
+      // re-entering them would re-scan every wrapper that was just created.
+      return [SKIP, nodeIndex + replacement.length];
     });
   };
 }

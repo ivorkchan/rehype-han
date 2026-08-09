@@ -282,6 +282,145 @@ test('does not re-wrap punctuation in descendants of existing custom wrapper', a
   assert.equal(output, expected);
 });
 
+test('wraps text that sits directly on the tree root', async () => {
+  const input = '你好，世界。';
+  const expected =
+    '你好<span class="cjk-punc">，</span>世界<span class="cjk-punc">。</span>';
+
+  const output = await render(input);
+
+  assert.equal(output, expected);
+});
+
+test('wraps square, angle, and tortoise-shell brackets', async () => {
+  const input = '<p>【标题】和〈书名〉与〔注〕。</p>';
+  const expected =
+    '<p><span class="cjk-punc">【</span>标题<span class="cjk-punc">】</span>和<span class="cjk-punc">〈</span>书名<span class="cjk-punc">〉</span>与<span class="cjk-punc">〔</span>注<span class="cjk-punc">〕</span><span class="cjk-punc adj-r">。</span></p>';
+
+  const output = await render(input);
+
+  assert.equal(output, expected);
+});
+
+test('applies adjacency around the added bracket pairs', async () => {
+  assert.equal(
+    await render('<p>。【</p>'),
+    '<p><span class="cjk-punc adj-l">。</span><span class="cjk-punc">【</span></p>'
+  );
+
+  assert.equal(
+    await render('<p>】，</p>'),
+    '<p><span class="cjk-punc">】</span><span class="cjk-punc adj-r">，</span></p>'
+  );
+});
+
+test('wraps a closing single quote that pairs with an open single quote', async () => {
+  const input = '<p>他说“I am ‘fine’”。</p>';
+  const expected =
+    '<p>他说<span class="cjk-punc">“</span>I am <span class="cjk-punc">‘</span>fine<span class="cjk-punc">’</span><span class="cjk-punc">”</span><span class="cjk-punc adj-r">。</span></p>';
+
+  const output = await render(input);
+
+  assert.equal(output, expected);
+});
+
+test('keeps an in-word apostrophe unwrapped inside single quotes', async () => {
+  const input = '<p>‘Mom’s note’</p>';
+  const expected =
+    '<p><span class="cjk-punc">‘</span>Mom’s note<span class="cjk-punc">’</span></p>';
+
+  const output = await render(input);
+
+  assert.equal(output, expected);
+});
+
+test('wraps full-width symbol forms but leaves full-width letters and digits alone', async () => {
+  assert.equal(
+    await render('<p>3～5天与￥100和＄20</p>'),
+    '<p>3<span class="cjk-punc">～</span>5天与<span class="cjk-punc">￥</span>100和<span class="cjk-punc">＄</span>20</p>'
+  );
+
+  assert.equal(
+    await render('<p>ＡＢＣ１２３ｱｲｳ，好</p>'),
+    '<p>ＡＢＣ１２３ｱｲｳ<span class="cjk-punc">，</span>好</p>'
+  );
+});
+
+test('treats the doubled midline ellipsis as one token and leaves a lone one bare', async () => {
+  const input = '<p>甲⋯⋯乙⋯丙</p>';
+  const expected = '<p>甲<span class="cjk-punc">⋯⋯</span>乙⋯丙</p>';
+
+  const output = await render(input);
+
+  assert.equal(output, expected);
+});
+
+test('does not wrap the Latin bullet', async () => {
+  const input = '<p>• item，好</p>';
+  const expected = '<p>• item<span class="cjk-punc">，</span>好</p>';
+
+  const output = await render(input);
+
+  assert.equal(output, expected);
+});
+
+test('never wraps inside markup-hostile elements even when ignoreTags is overridden', async () => {
+  const inputs = [
+    '<textarea>甲，乙</textarea>',
+    '<title>甲，乙</title>',
+    '<select><option>甲，乙</option></select>',
+    '<svg><g><text>甲，乙</text></g></svg>',
+    '<math><mi>甲，乙</mi></math>',
+  ];
+
+  for (const input of inputs) {
+    const output = await render(input, { ignoreTags: ['em'] });
+
+    assert.equal(output, input);
+  }
+});
+
+test('is idempotent across repeated runs', async () => {
+  const input = `<p>${FIXTURE_INPUT}</p>`;
+  const once = await render(input);
+  const twice = await render(once);
+
+  assert.equal(twice, once);
+});
+
+test('wraps text held directly by an MDX JSX node', () => {
+  const tree = {
+    type: 'root',
+    children: [
+      {
+        type: 'mdxJsxFlowElement',
+        name: 'Callout',
+        attributes: [],
+        children: [{ type: 'text', value: '甲，乙' }],
+      },
+    ],
+  };
+
+  rehypeHan()(tree);
+
+  assert.deepEqual(tree.children[0].children, [
+    { type: 'text', value: '甲' },
+    {
+      type: 'element',
+      tagName: 'span',
+      properties: { className: ['cjk-punc'] },
+      children: [{ type: 'text', value: '，' }],
+    },
+    { type: 'text', value: '乙' },
+  ]);
+});
+
+test('accepts a null options argument', async () => {
+  const output = await render('<p>A,B。</p>', null);
+
+  assert.equal(output, '<p>A,B<span class="cjk-punc">。</span></p>');
+});
+
 test('fixture regression keeps expected wrappers and adjacency around quote/bracket punctuation', async () => {
   const output = await render(`<p>${FIXTURE_INPUT}</p>`);
 
